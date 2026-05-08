@@ -146,7 +146,9 @@ def run_daily(symbol_index: str = "sh000905",
         "spread_width_pct": trade.spread_width_pct,
         "dte_target": trade.dte_target,
         "conditions": trade.conditions,
-        "hold_advice": trade.hold_advice,
+        "position_state": getattr(trade, "position_state", ""),
+        "stop_loss": getattr(trade, "stop_loss", None),
+        "position_advice": getattr(trade, "position_advice", ""),
     }
 
     if verbose:
@@ -154,9 +156,12 @@ def run_daily(symbol_index: str = "sh000905",
         print("=" * 60)
         print(f"  交易信号: {trade.action}")
         print(f"  入场允许: {'✅' if trade.entry_allowed else '❌'}")
+        print(f"  持仓状态: {getattr(trade, 'position_state', '')}")
+        if getattr(trade, 'stop_loss', None):
+            print(f"  止损价: {trade.stop_loss}")
         print(f"  {trade.description}")
-        if trade.hold_advice:
-            print(f"  {trade.hold_advice}")
+        if getattr(trade, 'position_advice', ''):
+            print(f"  {trade.position_advice}")
         print("=" * 60)
 
     return result

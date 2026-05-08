@@ -193,20 +193,62 @@ def decide(signal_result: dict,
             f"入场允许={ts.entry_allowed}"
         )
 
-    # 黑名单检查
-    if direction == "FULL" and weeks_since_flip > 5:
-        ts.hold_advice = (
-            "⚠️ WTS已连涨超5周，警惕趋势延伸风险。"
-            "已持仓建议收紧止损，未持仓不追入。"
-        )
-    elif direction == "FULL" and weeks_since_flip > 3:
-        ts.hold_advice = "WTS连涨中，注意IV压缩和回调风险。"
+    # ============================================================
+    # 持仓状态管理（与入场门控分离）
+    # ============================================================
+    # 入场门控判断是否开新仓
+    # 持仓管理判断已有仓位如何维护
 
-    # 持仓建议
     if direction == "FULL":
-        ts.hold_advice += " | 已持仓: 继续持有，止损=本周最低价。离场=WTS翻空。"
+        if weeks_since_flip == 0:
+            ts.position_state = "NO_POSITION"
+            ts.stop_loss = None
+            ts.position_advice = "无持仓。WTS刚翻多，等下周确认后入场。"
+        elif weeks_since_flip <= 2:
+            ts.position_state = "ENTRY_WINDOW"
+            ts.stop_loss = None
+            ts.position_advice = (
+                "入场窗口期。若已持仓→正常止损(本周最低价×0.98)。"
+                f"若未持仓→{'可开新仓' if ts.entry_allowed else '入场条件待满足'}。"
+            )
+        elif weeks_since_flip <= 5:
+            ts.position_state = "MID_TREND"
+            ts.stop_loss = round(underlying_price * (1 - atr_pct * 1.5), 2)
+            ts.position_advice = (
+                f"趋势中段。不开新仓。已持仓→止损收紧至 {ts.stop_loss}。"
+                "WTS翻空→立即平仓。"
+            )
+        else:
+            ts.position_state = "EXTENDED"
+            ts.stop_loss = round(underlying_price * (1 - atr_pct * 1.0), 2)
+            ts.position_advice = (
+                f"⚠️ WTS连涨{weeks_since_flip}周，趋势延伸风险高。"
+                f"不开新仓。已持仓→止损收紧至 {ts.stop_loss}（最近周最低价）。"
+                "考虑减仓1/2。WTS翻空→立即平仓。"
+            )
     else:
-        ts.hold_advice += " | 已持仓: 立即平仓。"
+        if weeks_since_flip <= 1:
+            ts.position_state = "FRESH_FLIP"
+            ts.stop_loss = round(underlying_price * (1 + atr_pct * 1.5), 2)
+            ts.position_advice = (
+                f"WTS刚翻空。若已做空→止损={ts.stop_loss}。"
+                f"{'可开新仓' if ts.entry_allowed else '入场条件待满足'}。"
+            )
+        elif weeks_since_flip <= 5:
+            ts.position_state = "MID_TREND"
+            ts.stop_loss = round(underlying_price * (1 + atr_pct * 1.0), 2)
+            ts.position_advice = (
+                f"下跌趋势中。不开新仓。已持仓→止损={ts.stop_loss}。"
+                "WTS翻多→立即平仓。"
+            )
+        else:
+            ts.position_state = "EXTENDED"
+            ts.stop_loss = round(underlying_price * (1 + atr_pct * 0.8), 2)
+            ts.position_advice = (
+                f"⚠️ WTS连跌{weeks_since_flip}周，趋势延伸但反转风险累积。"
+                f"已持仓→止损收紧至 {ts.stop_loss}。"
+                "考虑减仓。WTS翻多→立即平仓。"
+            )
 
     return ts
 
