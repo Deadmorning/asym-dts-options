@@ -257,6 +257,7 @@ def compute_exit_rules(signal_result: dict,
                        entry_price: float,
                        current_price: float,
                        days_held: int,
+                       dte_at_entry: int,
                        option_type: str) -> dict:
     """
     持仓退出规则。
@@ -265,17 +266,25 @@ def compute_exit_rules(signal_result: dict,
         {
             "should_exit": bool,
             "reason": str,
-            "stop_price": float or None,
+            "should_roll": bool,
+            "roll_reason": str,
         }
     """
     # 信号翻转 → 无条件退出
     if signal_result["target"] == 0:
-        return {"should_exit": True, "reason": "WTS翻空", "stop_price": None}
+        return {"should_exit": True, "reason": "WTS翻空",
+                "should_roll": False, "roll_reason": ""}
+
+    # 滚仓：Long Call/Put 剩余 ≤ 7 天 → 建议滚到新月合约
+    if option_type in ("BUY_CALL", "BUY_PUT"):
+        if dte_at_entry > 0 and days_held >= (dte_at_entry - 7):
+            return {"should_exit": True, "reason": "到期滚仓",
+                    "should_roll": True,
+                    "roll_reason": f"剩余DTE≤7天(dte_at_entry={dte_at_entry}, held={days_held}d)"}
 
     # Spread 止盈
     if option_type in ("SELL_PUT_SPREAD", "SELL_CALL_SPREAD"):
-        # 简化: 获利>60% → 止盈
-        # 实盘用 spread 当前价值 / 开仓价值 < 0.4 判断
-        pass
+        pass  # spread 价值衰减到 40% → 止盈（实盘监控）
 
-    return {"should_exit": False, "reason": "", "stop_price": None}
+    return {"should_exit": False, "reason": "",
+            "should_roll": False, "roll_reason": ""}
