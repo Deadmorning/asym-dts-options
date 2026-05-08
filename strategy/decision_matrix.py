@@ -282,9 +282,17 @@ def compute_exit_rules(signal_result: dict,
                     "should_roll": True,
                     "roll_reason": f"剩余DTE≤7天(dte_at_entry={dte_at_entry}, held={days_held}d)"}
 
-    # Spread 止盈
+    # Spread 止盈/止损
     if option_type in ("SELL_PUT_SPREAD", "SELL_CALL_SPREAD"):
-        pass  # spread 价值衰减到 40% → 止盈（实盘监控）
+        if dte_at_entry > 0:
+            # 当前价触及卖端 strike → 亏损止损
+            is_put = (option_type == "SELL_PUT_SPREAD")
+            if is_put and current_price <= entry_price:  # entry_price = sell strike
+                return {"should_exit": True, "reason": "触及卖Put strike",
+                        "should_roll": False, "roll_reason": ""}
+            if not is_put and current_price >= entry_price:  # entry_price = sell strike
+                return {"should_exit": True, "reason": "触及卖Call strike",
+                        "should_roll": False, "roll_reason": ""}
 
     return {"should_exit": False, "reason": "",
             "should_roll": False, "roll_reason": ""}
