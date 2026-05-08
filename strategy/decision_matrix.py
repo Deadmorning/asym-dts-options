@@ -162,12 +162,36 @@ def decide(signal_result: dict,
         )
 
     # ============================================================
-    # FLAT + IV MID/LOW → WAIT（无溢价可收, 无方向可跟）
+    # QUADRANT: FLAT + IV MID → BUY_PUT（正常趋势跟随做空）
     # ============================================================
-    elif direction == "FLAT" and iv_level in ("MID", "LOW"):
-        ts.action = "WAIT"
-        ts.entry_allowed = False
-        ts.description = "FLAT+LOW → 空仓。没有方向+没有溢价=不值得动手。"
+    # FLAT = WTS=0 = 下跌方向确定。默认跟着方向走——买Put。
+    # 卖Call spread只应在IV HIGH时触发。
+    elif direction == "FLAT" and iv_level == "MID":
+        ts.action = "BUY_PUT"
+        ts.entry_allowed = (weeks_since_flip <= 3)
+        ts.conditions = {
+            "WTS翻空确认": (ts.entry_allowed, f"翻空{weeks_since_flip}周"),
+        }
+        ts.description = (
+            f"FLAT+MID → 买ATM Put(正常趋势跟随做空). "
+            f"方向确定,IV合理→付公平权利金做空. DTE≈{dte}d. "
+            f"入场允许={ts.entry_allowed}"
+        )
+
+    # ============================================================
+    # QUADRANT: FLAT + IV LOW → BUY_PUT（便宜买Put做空）
+    # ============================================================
+    elif direction == "FLAT" and iv_level == "LOW":
+        ts.action = "BUY_PUT"
+        ts.entry_allowed = (weeks_since_flip <= 3)
+        ts.conditions = {
+            "WTS翻空确认": (ts.entry_allowed, f"翻空{weeks_since_flip}周"),
+        }
+        ts.description = (
+            f"FLAT+LOW → 买虚值Put(便宜做空). "
+            f"慢熊+期权便宜=最优Put买入场景. DTE≈{dte}d. "
+            f"入场允许={ts.entry_allowed}"
+        )
 
     # 黑名单检查
     if direction == "FULL" and weeks_since_flip > 5:
