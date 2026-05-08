@@ -112,70 +112,59 @@ def decide(signal_result: dict,
         )
 
     # ============================================================
-    # QUADRANT: FULL + IV MID → SELL_PUT_SPREAD (wider OTM)
+    # QUADRANT: FULL + IV MID → BUY_CALL（正常趋势跟随）
     # ============================================================
+    # MID IV 没有恐慌溢价可收割，不应卖 Put。
+    # 正常市场下方向对的唯一合理表达是买方结构。
     elif direction == "FULL" and iv_level == "MID":
-        ts.action = "SELL_PUT_SPREAD"
-        otm_dist = atr_pct * 1.0
-        ts.sell_strike = round(underlying_price * (1 - otm_dist), 2)
-        ts.buy_strike = round(ts.sell_strike * 0.95, 2)
-        ts.spread_width_pct = round((ts.sell_strike - ts.buy_strike) / ts.sell_strike * 100, 1)
-
-        cond1 = weeks_since_flip <= 2
-        cond2 = True  # MID 级别通过 IV 要求
-        cond3 = ts.sell_strike / underlying_price <= 0.92
-
+        ts.action = "BUY_CALL"
+        ts.entry_allowed = (weeks_since_flip >= 1)
         ts.conditions = {
-            "WTS翻多≤2周": (cond1, f"当前{weeks_since_flip}周"),
-            "IV≥50th分位": (True, "MID区间→通过"),
-            "Put strike安全距离(≤0.92)": (cond3, f"{ts.sell_strike/underlying_price:.2f}"),
+            "WTS持续多头≥1周": (ts.entry_allowed, f"当前{weeks_since_flip}周"),
         }
-        ts.entry_allowed = all(c for c, _ in ts.conditions.values())
         ts.description = (
-            f"FULL+MID → 卖OTM Put spread(宽). "
-            f"卖K={ts.sell_strike}, 买K={ts.buy_strike}, "
-            f"宽{ts.spread_width_pct}%, DTE≈{dte}d. "
+            f"FULL+MID → 买ATM Call(正常趋势跟随). "
+            f"方向确定,IV合理→付公平权利金买方向. DTE≈{dte}d. "
             f"入场允许={ts.entry_allowed}"
         )
 
     # ============================================================
-    # QUADRANT: FULL + IV LOW → BUY_CALL
+    # QUADRANT: FULL + IV LOW → BUY_CALL（便宜买方向）
     # ============================================================
     elif direction == "FULL" and iv_level == "LOW":
         ts.action = "BUY_CALL"
-        cond1 = weeks_since_flip >= 1
-        ts.conditions = {"WTS持续多头≥1周": (cond1, f"当前{weeks_since_flip}周")}
-        ts.entry_allowed = cond1
+        ts.entry_allowed = (weeks_since_flip >= 1)
+        ts.conditions = {"WTS持续多头≥1周": (ts.entry_allowed, f"当前{weeks_since_flip}周")}
         ts.description = (
-            f"FULL+LOW → 买ATM Call. "
-            f"方向确定+权利金便宜→直接买方向. DTE≈{dte}d. "
+            f"FULL+LOW → 买虚值Call(便宜买方向). "
+            f"方向确定+权利金便宜→可买稍虚值. DTE≈{dte}d. "
             f"入场允许={ts.entry_allowed}"
         )
 
     # ============================================================
-    # QUADRANT: FLAT + IV HIGH/MID → SELL_CALL_SPREAD
+    # QUADRANT: FLAT + IV HIGH → SELL_CALL_SPREAD
     # ============================================================
-    elif direction == "FLAT" and iv_level in ("HIGH", "MID"):
+    elif direction == "FLAT" and iv_level == "HIGH":
         ts.action = "SELL_CALL_SPREAD"
-        otm_dist = atr_pct * (0.8 if iv_level == "HIGH" else 1.0)
+        otm_dist = atr_pct * 0.8
         ts.sell_strike = round(underlying_price * (1 + otm_dist), 2)
         ts.buy_strike = round(ts.sell_strike * 1.05, 2)
         ts.spread_width_pct = round((ts.buy_strike - ts.sell_strike) / ts.sell_strike * 100, 1)
 
-        cond1 = weeks_since_flip <= 3  # WTS 翻空 3 周以内
-        ts.conditions = {"WTS翻空≤3周": (cond1, f"当前{weeks_since_flip}周(翻多)")}
+        cond1 = weeks_since_flip <= 3
+        ts.conditions = {"WTS翻空≤3周": (cond1, f"当前{weeks_since_flip}周")}
         ts.entry_allowed = cond1
         ts.description = (
-            f"FLAT+{iv_level} → 卖OTM Call spread. "
+            f"FLAT+HIGH → 卖OTM Call spread. "
             f"卖K={ts.sell_strike}, 买K={ts.buy_strike}, "
             f"宽{ts.spread_width_pct}%, DTE≈{dte}d. "
             f"入场允许={ts.entry_allowed}"
         )
 
     # ============================================================
-    # QUADRANT: FLAT + IV LOW → WAIT
+    # FLAT + IV MID/LOW → WAIT（无溢价可收, 无方向可跟）
     # ============================================================
-    elif direction == "FLAT" and iv_level == "LOW":
+    elif direction == "FLAT" and iv_level in ("MID", "LOW"):
         ts.action = "WAIT"
         ts.entry_allowed = False
         ts.description = "FLAT+LOW → 空仓。没有方向+没有溢价=不值得动手。"
