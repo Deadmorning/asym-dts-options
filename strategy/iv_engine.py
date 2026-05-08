@@ -123,9 +123,19 @@ class IVHistory:
         return "MID"
 
     def current_quantile(self, iv: float) -> dict:
+        cold_start = len(self.history) < 20
+        if cold_start:
+            return {
+                "iv": round(iv * 100, 2),
+                "percentile": 50.0,
+                "level": "MID",
+                "history_len": len(self.history),
+                "cold_start": True,
+            }
         return {
             "iv": round(iv * 100, 2),
             "percentile": round(self.percentile(iv), 1),
             "level": self.classify(iv),
             "history_len": len(self.history),
+            "cold_start": False,
         }

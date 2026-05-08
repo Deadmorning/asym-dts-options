@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from strategy.signals import run_signal_pipeline
 from strategy.iv_engine import get_atm_iv, IVHistory
-from strategy.decision_matrix import decide
+from strategy.decision_matrix import decide, TradeSignal
 from data.fetch import (
     fetch_index_daily, fetch_etf_daily,
     fetch_option_chain_510500, get_underlying_price,
@@ -133,8 +133,19 @@ def run_daily(symbol_index: str = "sh000905",
     # ---- Step 5: 决策矩阵 ----
     if verbose:
         print("[5/5] 决策矩阵...")
-    trade = decide(signal_result, iv_result, underlying_price, atr_pct)
-    trade.date = str(today.date())
+    cold_start = iv_result.get("cold_start", False) if iv_result else True
+    if cold_start:
+        trade = TradeSignal(
+            date=str(today.date()),
+            direction="FULL" if signal_result["target"] == 1 else "FLAT",
+            iv_level="MID",
+            action="WAIT",
+            description=f"冷启动(IV历史{iv_result.get('history_len', 0)}天<20)，强制等待",
+            entry_allowed=False,
+        )
+    else:
+        trade = decide(signal_result, iv_result, underlying_price, atr_pct)
+        trade.date = str(today.date())
     result["trade"] = {
         "action": trade.action,
         "direction": trade.direction,
